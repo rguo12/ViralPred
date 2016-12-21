@@ -50,15 +50,33 @@ def memory_ccdf(T,theta,cutoff,c):
     return ccdf
 
 """
-t1: a vector of 
+t1: a vector of lower limits for integral
+t2: a vector of upper limits for integral
+ptime: scalar, the time to est infectiousness and predict cascade size
+slope: slope of linear kernel
+window: size of the linear kernel
+
+@return
+
+\code{linear.kernel} returns the integral from vector t1 to vector t2 of
+c*[slope(t-ptime) + 1];
+
+\code{power.kernel} returns the integral from vector t1 to vector 2 of
+c*((t-share.time)/cutoff)^(-(1+theta))[slope(t-ptime) + 1];
+
+\code{integral.memory.kernel} returns
+the vector with ith entry being integral_-inf^inf phi_share.time[i]*kernel(t-p.time)
 """
 
+def linear_integral(t,ptime,slope,c):
+    return c*(np.add(np.subtract(t,ptime*slope*t),slope*np.divide(np.power(t,2.0),2.0)))
 
 def linear_kernel(t1,t2,ptime,slope,c):
-    return c*(t2-ptime*slope*t2+slope*np.power(t2,2.0)/2.0) - c*(t1-ptime*slope*t1+slope*np.power(t1,2.0)/2.0)
+    return  linear_integral(t2,ptime,slope,c) - linear_integral(t1,ptime,slope,c)
 
 def power_kernel_base(t,ptime,share_time,slope,theta,cutoff,c):
-    return c*np.power(cutoff,(1+theta))*np.power((t-share_time),-theta)*(share_time*slope-theta+(theta-1)*ptime*slope-theta*slope*t+1)/((theta-1)*theta)
+    #(c*cutoff^(1+theta)*(t2-share.time)^(-theta)*(share.time*slope-theta+(theta-1)*ptime*slope-theta*slope*t2+1)/((theta-1)*theta)
+    return c*(cutoff**(1+theta))*np.power((t-share_time),-theta)*(share_time*slope-theta+(theta-1)*ptime*slope-theta*slope*t+1)/((theta-1.0)*theta)
 
 def power_kernel(t1,t2,ptime,share_time,slope,theta,cutoff,c):
     return power_kernel_base(t2,ptime,share_time,slope,theta,cutoff,c) - power_kernel_base(t1,ptime,share_time,slope,theta,cutoff,c)
@@ -89,16 +107,44 @@ def integral_memory_kernel(ptime,share_time,slope,window,theta,cutoff,c):
 
     return integral
 
+"""
+' Estimate the infectiousness of an information cascade
+'
+' @param share.time observed resharing times, sorted, share.time[0] =0
+' @param degree observed node degrees
+' @param p.time equally spaced vector of time to estimate the infectiousness, p.time[1]=0
+' @param max.window maximum span of the locally weight kernel
+' @param min.window minimum span of the locally weight kernel
+' @param min.count the minimum number of resharings included in the window
+' @details Use a triangular kernel with shape changing over time. At time p.time, use a triangluer kernel with slope = min(max(1/(\code{p.time}/2), 1/\code{min.window}), \code{max.window}).
+' @return a list of three vectors: \itemize{
+' \item infectiousness. the estimated infectiousness
+' \item p.up. the upper 95 percent approximate confidence interval
+' \item p.low. the lower 95 percent approximate confidence interval
+' }
+' @export
+' @examples
+' data(tweet)
+' pred.time <- seq(0, 6 * 60 * 60, by = 60)
+' infectiousness <- get.infectiousness(tweet[, 1], tweet[, 2], pred.time)
+' plot(pred.time, infectiousness$infectiousness)
+"""
+
 def get_infectious(share_time,degree,ptimes,max_window=2*60*6000,min_window=3000,min_count=25):
     share_time = sorted(share_time)
 
-    slopes = np.divide(1.0,np.divide(ptimes,2.0))
+    slopes = np.divide(2.0,ptimes)
+    slopes = np.asarray(slopes)
+    slopes[np.where(slopes < 1.0/max_window)] = 1.0/max_window
+    slopes[np.where(slopes > 1.0/min_window)] = 1.0/min_window
+    '''
     for i in xrange(len(slopes)):
         slope = slopes[i]
         if slope < 1.0/max_window:
             slopes[i] = 1.0/max_window
         elif slope > 1.0/min_window:
             slopes[i] = 1.0/min_window
+    '''
 
     windows = np.divide(ptimes,2.0)
     for i in xrange(0,len(windows)):
@@ -116,7 +162,8 @@ def get_infectious(share_time,degree,ptimes,max_window=2*60*6000,min_window=3000
                 ind.append(k)
 
         if (len(ind) < min_count):
-            ind2 = [k for k in xrange(0,len(share_time)) if share_time[k] < ptimes[j]]
+            #ind2 = [k for k in xrange(0,len(share_time)) if share_time[k] < ptimes[j]]
+            ind2 = np.where(share_time < ptimes[j])
             lcv = len(ind2)
             ind = ind2[max((lcv-min_count-1),0):lcv-1]
             x = ptimes[j]
@@ -135,7 +182,7 @@ def get_infectious(share_time,degree,ptimes,max_window=2*60*6000,min_window=3000
     share_time = share_time[1:]
 
     for j in xrange(0,len(ptimes)):
-        share_time_tri = [t for t in share_time if t > ptimes[j] - windows[j] and t < ptimes[j]]
+        share_time_tri = [t for t in share_time if t >= ptimes[j] - windows[j] and t < ptimes[j]]
         #print share_time_tri
         rt_count_weighted = np.sum(np.add(np.multiply(slopes[j],np.subtract(share_time_tri,ptimes[j])),1))
         #print rt_count_weighted
