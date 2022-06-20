@@ -1,3 +1,5 @@
+# also computes response time distribution
+
 from sqlalchemy import create_engine
 import pandas as pd
 from collections import defaultdict
@@ -39,28 +41,35 @@ if __name__ == '__main__':
     res_time_list = []
 
     for name, cascade in cascades:
+        # for each cascade size > 50
         if len(cascade) < 50:
             continue
+            
+        # active nodes
         adps = cascade[1].values.astype('int').tolist()
 
         times = cascade[2].values
+        
+        # compute time relative to the beginning of the cascade
         times = np.subtract(times,times[0])
         times = times.tolist()
+        
         #linear search for the first active in_nei
-
-        adps_done = {}
+        adps_done = {} # save those which are not active anymore
         done_cnt = 1
-
 
         for i in xrange(0,len(adps)):
             adp = adps[i]
-            innei = set(innei_d[adp])
+            innei = set(innei_d[adp]) # neighbors of i-th active node
             t_i = times[i]
             #previous_adps = adps[:i]
             #innei.intersection(previous_adps)
+            
             for j in xrange(0,i):
+                # for each node activated before node i
                 if adps[i-j] in innei and adps[i-j] not in adps_done:
                     adps_done[adps[i-j]] = 1
+                    
                     prev_time = times[i-j]
                     res_time = t_i - prev_time
                     res_time_list.append(res_time)
