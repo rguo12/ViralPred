@@ -1,3 +1,5 @@
+# This file computes some centralities using the igraph package
+
 #import snap
 import pandas as pd
 import igraph
