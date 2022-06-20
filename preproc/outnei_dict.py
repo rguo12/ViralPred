@@ -1,3 +1,5 @@
+# create a dict to store followee - follower relationship
+
 from collections import defaultdict
 import cPickle
 if __name__ == '__main__':
