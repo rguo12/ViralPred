@@ -1,3 +1,5 @@
+# this file plots histogram for response time distribution
+
 from sqlalchemy import create_engine
 import pandas as pd
 
